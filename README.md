@@ -1,14 +1,15 @@
 # Smart City Infrastructure and Route Planning
 
-This AITU assignment models weighted city infrastructure as graphs and will
-eventually compare graph algorithms using tests and reproducible experiments.
+This AITU assignment models weighted city infrastructure as graphs and
+implements graph algorithms with unit tests. Benchmarking and experimental
+analysis are reserved for a later stage.
 
 ## Requirements
 
 - Java 17
 - Maven 3.8 or newer
 
-## Implemented features: Days 1-4
+## Implemented features: Days 1-7
 
 Day 1 provides an immutable integer-weighted `Edge`, a directed or undirected
 `WeightedGraph` with an edge list and adjacency lists, a small runnable
@@ -36,12 +37,72 @@ false. A one-vertex graph is connected with a zero-edge tree; a zero-vertex
 graph is considered disconnected because no spanning tree exists. The
 algorithms support negative weights and do not modify their input graph.
 
+## Day 5: Topological sorting and directed-cycle detection
+
+`connectivity.TopologicalSort.sort(graph)` applies Kahn's algorithm to a
+directed graph. A topological ordering places the source of each edge before
+its destination; such an ordering exists only for a directed acyclic graph.
+The algorithm counts every edge occurrence in each vertex's in-degree, so
+duplicate edges are handled correctly. If a cycle remains, the result reports
+`hasCycle()` and returns an empty ordering rather than a partial one.
+Undirected inputs are rejected with `IllegalArgumentException`.
+
+```java
+WeightedGraph dag = new WeightedGraph(3, true);
+dag.addEdge(0, 1, 1);
+dag.addEdge(1, 2, 1);
+TopologicalSortResult result = TopologicalSort.sort(dag);
+System.out.println(result.getOrdering()); // [0, 1, 2]
+System.out.println(result.hasCycle());    // false
+```
+
+The runtime is `O(V + E)` and auxiliary space is `O(V)`.
+
+## Day 6: Strongly connected components
+
+`connectivity.KosarajuSCC.findStronglyConnectedComponents(graph)` returns each
+strongly connected component as an immutable list of vertex IDs. A component is
+a maximal set where every vertex can reach every other vertex. Kosaraju's
+algorithm first records DFS finishing order in the original directed graph,
+then runs DFS in reverse finishing order on the transposed graph (all edges
+reversed). The transpose makes each second-pass traversal collect exactly one
+component. Undirected inputs are rejected.
+
+```java
+List<List<Integer>> components =
+        KosarajuSCC.findStronglyConnectedComponents(directedGraph);
+System.out.println(components);
+```
+
+The runtime is `O(V + E)` and auxiliary space is `O(V + E)` to store the
+transpose and traversal state.
+
+## Day 7: Dijkstra shortest paths
+
+`shortestpath.Dijkstra.findShortestPaths(graph, source)` computes shortest
+distances from a source in either a directed or undirected graph. It uses a
+priority queue and skips stale entries; a result provides the source, all
+distances, reachability checks, and immutable reconstructed paths. Distances
+use `long`, with `Long.MAX_VALUE` denoting unreachable vertices. Any negative
+edge weight is rejected, even if the edge is disconnected from the source.
+Undirected traversal determines the opposite endpoint from each stored edge's
+original source/destination.
+
+```java
+WeightedGraph routes = new WeightedGraph(3, false);
+routes.addEdge(0, 1, 4);
+routes.addEdge(1, 2, 3);
+ShortestPathResult paths = Dijkstra.findShortestPaths(routes, 0);
+System.out.println(paths.getDistanceTo(2)); // 7
+System.out.println(paths.getPathTo(2));     // [0, 1, 2]
+```
+
+With lazy duplicate priority-queue entries, runtime is
+`O(V + (E + 1) log(E + 1))` and auxiliary space is `O(V + E)`. For simple
+graphs, the time bound is `O((V + E) log V)`.
+
 ## Not implemented yet
 
-- Topological sorting
-- Cycle detection for directed graphs
-- Strongly Connected Components
-- Dijkstra's shortest-path algorithm
 - Graph generation for experiments
 - Performance benchmarking and operation counters
 - CSV result tables
@@ -64,17 +125,17 @@ packaging, run it with the compiled classes on the classpath:
 java -cp target/classes Main
 ```
 
-The demonstration preserves the Day 1 graph-model output and then prints a
-small graph's Kruskal and Prim edges, total weights, connectivity, and whether
-the algorithm totals agree.
+The demonstration preserves the Day 1 graph-model output and prints the MST,
+topological-sort, cycle-detection, SCC, and shortest-path examples.
 
 ## Package layout
 
 - `graph`: `Edge` and `WeightedGraph` (implemented on Day 1)
 - `dsu`: DSU implementation
 - `mst`: Kruskal, Prim, and the shared `MSTResult`
-- `Main`: Day 1 graph-model and MST demonstration
-- `src/test/java/graph`, `src/test/java/dsu`, and `src/test/java/mst`: graph,
-  DSU, and minimum-spanning-tree tests
-- Connectivity, shortest-path, graph-generation, and benchmark features remain
-  future work
+- `connectivity`: Kahn's topological sort and Kosaraju's SCC implementation
+- `shortestpath`: Dijkstra's algorithm and immutable `ShortestPathResult`
+- `Main`: graph-model, MST, connectivity, and shortest-path demonstration
+- `src/test/java/graph`, `src/test/java/dsu`, `src/test/java/mst`,
+  `src/test/java/connectivity`, and `src/test/java/shortestpath`: unit tests
+- Graph generation and benchmark features remain future work
