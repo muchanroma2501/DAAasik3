@@ -197,6 +197,70 @@ for example `java -cp target/classes benchmark.BenchmarkExperimentMain custom/re
 The fixed seed and dataset definitions reproduce graph inputs;
 elapsed times naturally vary by runtime environment.
 
+## Day 10: visualization and performance analysis
+
+The Python visualization script validates the Days 8–9 raw and summary CSVs
+before plotting. It rejects missing columns/files, malformed numeric data,
+unexpected algorithm or dataset labels, incorrect repetition counts, failed
+correctness statuses, graph metadata errors, and mismatches between raw runs
+and summary statistics. It uses Python's CSV parser, so CSV quoting is handled
+without altering the source data.
+
+Install Matplotlib if it is not already available:
+
+```text
+python -m pip install matplotlib
+```
+
+Generate plots from the project root:
+
+```text
+python scripts/plot_results.py
+```
+
+The script locates input CSVs relative to its own location, so it can also be
+called by absolute script path from another working directory. It creates
+`results/plots/` automatically. The script reads but never rewrites:
+`results/tables/benchmark_runs.csv` (75 individual measured rows, five per
+algorithm/dataset) and `results/tables/benchmark_summary.csv` (15 grouped
+summaries).
+
+Generated files:
+
+- `runtime_mean_by_dataset.png`: grouped mean-runtime markers for the five
+  algorithms across the categorical Small, Medium, and Large datasets.
+- `runtime_distribution.png`: box plots of the five raw measured times for
+  every algorithm, split into one panel per dataset; warm-ups are excluded.
+- `operation_counts.png`: per-algorithm small multiples of relevant operation
+  counter means. Panels state the specific counter; separate metrics are not
+  summed or represented as a common “total operations” value.
+- `runtime_scaling.png`: each algorithm's runtime across the three tested
+  dataset categories, annotated with vertex and **actual** edge counts. The
+  Medium DAG is displayed as `E=495` (requested 500), not 500 actual edges.
+
+Runtime plots use milliseconds and a symmetric logarithmic vertical scale to
+show the range while retaining valid handling of zero-valued measurements.
+The distribution plot uses the individual nanosecond measurements converted
+to milliseconds for display; the CSV values remain unchanged. The summary
+statistics are derived from raw runs: mean, median, minimum, and maximum are
+shown/available in the summary CSV, while distribution charts preserve
+run-to-run variability. The operation plots use the documented definitions:
+Kruskal edge examinations, DSU union attempts, and successful unions; Prim
+adjacency examinations and queue polls/insertions; topological-sort edge
+examinations and processed vertices; SCC traversal edge examinations and
+visits across both passes; Dijkstra adjacency examinations, queue polls and
+insertions, and successful relaxations. These operation categories are
+algorithm-specific and are not directly comparable or interchangeable.
+
+The plotted values are five-run `System.nanoTime()` measurements from the
+lightweight educational harness, not a JMH-grade benchmark. Instrumentation
+counter checks occur inside the timed algorithm call, and hardware, JVM state,
+garbage collection, scheduling, and environment load can affect results. Three
+dataset categories show observed behavior only; they do not prove asymptotic
+complexity. Re-running the script against the same CSV inputs produces the
+same plotted values and filenames; rendering metadata may vary with the local
+Matplotlib/font environment.
+
 ## Build, test, and run
 
 ```text
@@ -224,6 +288,7 @@ topological-sort, cycle-detection, SCC, and shortest-path examples.
 - `benchmark`: benchmark configuration, deterministic graph generation,
   validators, experiment orchestration, operation counts, CSV output, and
   timing/summary metrics
+- `scripts/plot_results.py`: input validation and Days 8–9 result visualization
 - `Main`: graph-model, MST, connectivity, and shortest-path demonstration
 - `src/test/java/graph`, `src/test/java/dsu`, `src/test/java/mst`,
   `src/test/java/connectivity`, and `src/test/java/shortestpath`: unit tests
