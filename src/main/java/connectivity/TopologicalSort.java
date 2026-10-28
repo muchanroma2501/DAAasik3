@@ -1,5 +1,6 @@
 package connectivity;
 
+import benchmark.OperationCounter;
 import graph.Edge;
 import graph.WeightedGraph;
 
@@ -26,6 +27,18 @@ public final class TopologicalSort {
      * @throws NullPointerException if {@code graph} is null
      */
     public static TopologicalSortResult sort(WeightedGraph graph) {
+        return sort(graph, null);
+    }
+
+    /**
+     * Computes a topological ordering while optionally collecting operation
+     * counts for educational benchmarks.
+     *
+     * @param graph directed graph to process
+     * @param counter optional operation counter
+     * @return complete ordering, or an empty ordering if cyclic
+     */
+    public static TopologicalSortResult sort(WeightedGraph graph, OperationCounter counter) {
         if (!graph.isDirected()) {
             throw new IllegalArgumentException("Topological sort requires a directed graph");
         }
@@ -34,6 +47,9 @@ public final class TopologicalSort {
         int[] inDegree = new int[vertexCount];
         for (int vertex = 0; vertex < vertexCount; vertex++) {
             for (Edge edge : graph.getAdjacencyList(vertex)) {
+                if (counter != null) {
+                    counter.recordEdgeExamination();
+                }
                 inDegree[edge.getDestination()]++;
             }
         }
@@ -48,8 +64,14 @@ public final class TopologicalSort {
         List<Integer> ordering = new ArrayList<>(vertexCount);
         while (!ready.isEmpty()) {
             int vertex = ready.remove();
+            if (counter != null) {
+                counter.recordVertexProcessed();
+            }
             ordering.add(vertex);
             for (Edge edge : graph.getAdjacencyList(vertex)) {
+                if (counter != null) {
+                    counter.recordEdgeExamination();
+                }
                 int destination = edge.getDestination();
                 inDegree[destination]--;
                 if (inDegree[destination] == 0) {

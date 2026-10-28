@@ -1,5 +1,6 @@
 package shortestpath;
 
+import benchmark.OperationCounter;
 import graph.Edge;
 import graph.WeightedGraph;
 
@@ -33,6 +34,20 @@ public final class Dijkstra {
      * @throws NullPointerException if {@code graph} is null
      */
     public static ShortestPathResult findShortestPaths(WeightedGraph graph, int source) {
+        return findShortestPaths(graph, source, null);
+    }
+
+    /**
+     * Computes shortest paths while optionally collecting operation counts
+     * for educational benchmarks.
+     *
+     * @param graph directed or undirected graph with nonnegative weights
+     * @param source source vertex ID
+     * @param counter optional operation counter
+     * @return immutable shortest distances and path reconstruction data
+     */
+    public static ShortestPathResult findShortestPaths(WeightedGraph graph, int source,
+                                                       OperationCounter counter) {
         int vertexCount = graph.getVertexCount();
         if (source < 0 || source >= vertexCount) {
             throw new IndexOutOfBoundsException(
@@ -54,14 +69,23 @@ public final class Dijkstra {
         PriorityQueue<QueueEntry> queue = new PriorityQueue<>(
                 Comparator.comparingLong(QueueEntry::distance));
         queue.add(new QueueEntry(source, 0));
+        if (counter != null) {
+            counter.recordPriorityQueueInsertion();
+        }
         while (!queue.isEmpty()) {
             QueueEntry entry = queue.remove();
+            if (counter != null) {
+                counter.recordPriorityQueuePoll();
+            }
             if (entry.distance() != distances[entry.vertex()]) {
                 continue;
             }
 
             int vertex = entry.vertex();
             for (Edge edge : graph.getAdjacencyList(vertex)) {
+                if (counter != null) {
+                    counter.recordEdgeExamination();
+                }
                 int neighbor = graph.isDirected()
                         ? edge.getDestination()
                         : oppositeEndpoint(edge, vertex);
@@ -74,6 +98,10 @@ public final class Dijkstra {
                     distances[neighbor] = candidate;
                     predecessors[neighbor] = vertex;
                     queue.add(new QueueEntry(neighbor, candidate));
+                    if (counter != null) {
+                        counter.recordSuccessfulRelaxation();
+                        counter.recordPriorityQueueInsertion();
+                    }
                 }
             }
         }

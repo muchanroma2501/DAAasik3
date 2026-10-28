@@ -1,5 +1,6 @@
 package mst;
 
+import benchmark.OperationCounter;
 import dsu.DSU;
 import graph.Edge;
 import graph.WeightedGraph;
@@ -34,6 +35,18 @@ public final class Kruskal {
      * @throws NullPointerException if {@code graph} is null
      */
     public static MSTResult findMst(WeightedGraph graph) {
+        return findMst(graph, null);
+    }
+
+    /**
+     * Computes a minimum spanning tree or forest while optionally collecting
+     * operation counts for educational benchmarks.
+     *
+     * @param graph undirected weighted graph
+     * @param counter optional operation counter
+     * @return selected edges, their total weight, and spanning-tree status
+     */
+    public static MSTResult findMst(WeightedGraph graph, OperationCounter counter) {
         if (graph.isDirected()) {
             throw new IllegalArgumentException("Kruskal requires an undirected graph");
         }
@@ -46,7 +59,14 @@ public final class Kruskal {
         List<Edge> selectedEdges = new ArrayList<>(Math.max(0, vertexCount - 1));
         long totalWeight = 0;
         for (Edge edge : candidates) {
+            if (counter != null) {
+                counter.recordEdgeExamination();
+                counter.recordUnionAttempt();
+            }
             if (components.union(edge.getSource(), edge.getDestination())) {
+                if (counter != null) {
+                    counter.recordSuccessfulUnion();
+                }
                 selectedEdges.add(edge);
                 totalWeight += edge.getWeight();
                 if (selectedEdges.size() == vertexCount - 1) {

@@ -1,5 +1,6 @@
 package mst;
 
+import benchmark.OperationCounter;
 import graph.Edge;
 import graph.WeightedGraph;
 
@@ -37,10 +38,22 @@ public final class Prim {
      * @throws NullPointerException if {@code graph} is null
      */
     public static MSTResult findMst(WeightedGraph graph) {
+        return findMst(graph, null);
+    }
+
+    /**
+     * Computes a minimum spanning tree or forest while optionally collecting
+     * operation counts for educational benchmarks.
+     *
+     * @param graph undirected weighted graph
+     * @param counter optional operation counter
+     * @return selected edges, their total weight, and spanning-tree status
+     */
+    public static MSTResult findMst(WeightedGraph graph, OperationCounter counter) {
         if (graph.isDirected()) {
             throw new IllegalArgumentException("Prim requires an undirected graph");
         }
-        return findMst(graph, 0, false);
+        return findMst(graph, 0, false, counter);
     }
 
     /**
@@ -55,13 +68,27 @@ public final class Prim {
      * @throws NullPointerException if {@code graph} is null
      */
     public static MSTResult findMst(WeightedGraph graph, int source) {
+        return findMst(graph, source, null);
+    }
+
+    /**
+     * Computes a minimum spanning tree or forest while optionally collecting
+     * operation counts for educational benchmarks.
+     *
+     * @param graph undirected weighted graph
+     * @param source starting vertex for the first component
+     * @param counter optional operation counter
+     * @return selected edges, their total weight, and spanning-tree status
+     */
+    public static MSTResult findMst(WeightedGraph graph, int source, OperationCounter counter) {
         if (graph.isDirected()) {
             throw new IllegalArgumentException("Prim requires an undirected graph");
         }
-        return findMst(graph, source, true);
+        return findMst(graph, source, true, counter);
     }
 
-    private static MSTResult findMst(WeightedGraph graph, int source, boolean validateSource) {
+    private static MSTResult findMst(WeightedGraph graph, int source, boolean validateSource,
+                                     OperationCounter counter) {
         int vertexCount = graph.getVertexCount();
         if (validateSource && (source < 0 || source >= vertexCount)) {
             throw new IndexOutOfBoundsException(
@@ -74,12 +101,13 @@ public final class Prim {
         long totalWeight = 0;
 
         if (vertexCount > 0) {
-            totalWeight = growComponent(graph, source, visited, candidates, selectedEdges, totalWeight);
+            totalWeight = growComponent(graph, source, visited, candidates, selectedEdges,
+                    totalWeight, counter);
         }
         for (int vertex = 0; vertex < vertexCount; vertex++) {
             if (!visited[vertex]) {
                 totalWeight = growComponent(graph, vertex, visited, candidates, selectedEdges,
-                        totalWeight);
+                        totalWeight, counter);
             }
         }
 
@@ -89,12 +117,15 @@ public final class Prim {
 
     private static long growComponent(WeightedGraph graph, int start, boolean[] visited,
                                       PriorityQueue<Edge> candidates, List<Edge> selectedEdges,
-                                      long totalWeight) {
+                                      long totalWeight, OperationCounter counter) {
         visited[start] = true;
-        candidates.addAll(graph.getAdjacencyList(start));
+        addAdjacentCandidates(graph, start, candidates, counter);
 
         while (!candidates.isEmpty()) {
             Edge edge = candidates.remove();
+            if (counter != null) {
+                counter.recordPriorityQueuePoll();
+            }
             int nextVertex = visited[edge.getSource()]
                     ? edge.getDestination()
                     : edge.getSource();
@@ -105,9 +136,21 @@ public final class Prim {
             visited[nextVertex] = true;
             selectedEdges.add(edge);
             totalWeight += edge.getWeight();
-            candidates.addAll(graph.getAdjacencyList(nextVertex));
+            addAdjacentCandidates(graph, nextVertex, candidates, counter);
         }
 
         return totalWeight;
+    }
+
+    private static void addAdjacentCandidates(WeightedGraph graph, int vertex,
+                                              PriorityQueue<Edge> candidates,
+                                              OperationCounter counter) {
+        for (Edge edge : graph.getAdjacencyList(vertex)) {
+            if (counter != null) {
+                counter.recordEdgeExamination();
+                counter.recordPriorityQueueInsertion();
+            }
+            candidates.add(edge);
+        }
     }
 }

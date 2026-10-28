@@ -1,8 +1,8 @@
 # Smart City Infrastructure and Route Planning
 
 This AITU assignment models weighted city infrastructure as graphs and
-implements graph algorithms with unit tests. Benchmarking and experimental
-analysis are reserved for a later stage.
+implements graph algorithms with unit tests and a lightweight educational
+benchmark infrastructure.
 
 ## Requirements
 
@@ -101,15 +101,64 @@ With lazy duplicate priority-queue entries, runtime is
 `O(V + (E + 1) log(E + 1))` and auxiliary space is `O(V + E)`. For simple
 graphs, the time bound is `O((V + E) log V)`.
 
-## Not implemented yet
+## Day 8: benchmark infrastructure
 
-- Graph generation for experiments
-- Performance benchmarking and operation counters
-- CSV result tables
-- Plots and final experimental analysis
+The `benchmark` package provides deterministic inputs and a reusable timing
+harness; it does not yet run the full Day 9 experiments or create CSV files.
+No measured results are claimed.
 
-No benchmark results are claimed; experimental features have not been built or
-run.
+- `BenchmarkConfig` defines Small (10 vertices, 30 edges), Medium (100, 500),
+  and Large (1000, 5000) datasets, two warm-ups, five measured repetitions, and
+  the fixed seed `20261029`.
+- `GraphGenerator` creates connected simple undirected weighted graphs,
+  simple DAGs, directed cyclic graphs, and connected undirected Dijkstra graphs.
+  Weights are integers in `[1, 100]`. The Dijkstra policy is undirected so
+  source vertex 0 can reach every vertex.
+- `BenchmarkRunner` reuses the same graph for warm-ups and timed repetitions.
+  `System.nanoTime()` measures only algorithm execution; graph creation and
+  correctness checks are outside the timed interval. Warm-ups are not returned
+  as measurements. The harness is an educational microbenchmark, not a formal
+  JMH benchmark; JVM warm-up, garbage collection, scheduling, and machine load
+  can affect observed times.
+- `BenchmarkMetrics` is an immutable record for one measured run, including
+  actual edge count, repeat index, time, correctness status, and a snapshot of
+  operation counts. `OperationCounter` is a per-execution collector, passed
+  only to opt-in instrumented overloads; existing algorithm entry points are
+  preserved.
+
+Generated undirected graphs have exactly the requested number of logical edges,
+no self-loops or repeated edges, and include a spanning tree. A simple graph
+requires `V - 1 <= E <= V(V - 1)/2`. DAG edges only point from a lower vertex ID
+to a higher ID, so a simple DAG has at most `V(V - 1)/2` edges (4,950 at
+V=100). The assignment specifies a separate 495-edge cap for its standard
+Medium DAG, so that dataset uses 495 rather than 500. This is a workload policy,
+not the mathematical maximum. `BenchmarkConfig.dagEdgeCount(dataset)` applies
+that explicit Medium-dataset cap; other impossible counts are rejected.
+The cyclic graph generator includes a cycle of length `V` (a two-vertex cycle
+when `V=2`) and then fills to the exact requested count. Impossible edge counts
+are rejected rather than silently reduced, except for the explicit DAG dataset
+edge-count policy.
+
+Optional counters record executed operations, not theoretical estimates:
+
+- Kruskal: examined candidate edges, union attempts, and successful unions;
+  edge examinations stop when its spanning tree is complete.
+- Prim: adjacency edge examinations and priority-queue insertions when each
+  candidate is enqueued, plus every removal including stale candidates.
+- Topological sort: edge examinations in both the in-degree and Kahn passes,
+  and vertices removed from the ready queue.
+- Kosaraju SCC: DFS edge examinations across both passes and vertices marked
+  visited across both passes.
+- Dijkstra: examined adjacency edges, all queue removals including stale
+  entries, queue insertions including the source, and successful distance
+  relaxations.
+
+Operation counts are algorithm-specific and should not be compared across
+different algorithms as if they were identical work units. The graph families
+and counters provide reproducible inputs and observed work; theoretical
+complexity describes asymptotic growth, while empirical time depends on the
+input, JVM, hardware, and environment. Day 9 will add experiment orchestration
+and CSV summaries; plots and final analysis remain for Day 10.
 
 ## Build, test, and run
 
@@ -135,7 +184,9 @@ topological-sort, cycle-detection, SCC, and shortest-path examples.
 - `mst`: Kruskal, Prim, and the shared `MSTResult`
 - `connectivity`: Kahn's topological sort and Kosaraju's SCC implementation
 - `shortestpath`: Dijkstra's algorithm and immutable `ShortestPathResult`
+- `benchmark`: benchmark configuration, deterministic graph generation,
+  operation counts, per-run metrics, and the timing harness
 - `Main`: graph-model, MST, connectivity, and shortest-path demonstration
 - `src/test/java/graph`, `src/test/java/dsu`, `src/test/java/mst`,
   `src/test/java/connectivity`, and `src/test/java/shortestpath`: unit tests
-- Graph generation and benchmark features remain future work
+- `src/test/java/benchmark`: benchmark infrastructure tests

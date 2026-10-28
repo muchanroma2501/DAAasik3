@@ -1,5 +1,6 @@
 package connectivity;
 
+import benchmark.OperationCounter;
 import graph.Edge;
 import graph.WeightedGraph;
 
@@ -28,6 +29,19 @@ public final class KosarajuSCC {
      * @throws NullPointerException if {@code graph} is null
      */
     public static List<List<Integer>> findStronglyConnectedComponents(WeightedGraph graph) {
+        return findStronglyConnectedComponents(graph, null);
+    }
+
+    /**
+     * Finds all strongly connected components while optionally collecting
+     * operation counts for educational benchmarks.
+     *
+     * @param graph directed graph to process
+     * @param counter optional operation counter
+     * @return immutable list of immutable vertex collections
+     */
+    public static List<List<Integer>> findStronglyConnectedComponents(
+            WeightedGraph graph, OperationCounter counter) {
         if (!graph.isDirected()) {
             throw new IllegalArgumentException("SCC search requires a directed graph");
         }
@@ -47,21 +61,22 @@ public final class KosarajuSCC {
             }
         }
 
-        List<Integer> finishingOrder = finishingOrder(adjacency);
+        List<Integer> finishingOrder = finishingOrder(adjacency, counter);
         boolean[] visited = new boolean[vertexCount];
         List<List<Integer>> components = new ArrayList<>();
         for (int index = finishingOrder.size() - 1; index >= 0; index--) {
             int vertex = finishingOrder.get(index);
             if (!visited[vertex]) {
                 List<Integer> component = new ArrayList<>();
-                collectComponent(vertex, transpose, visited, component);
+                collectComponent(vertex, transpose, visited, component, counter);
                 components.add(List.copyOf(component));
             }
         }
         return List.copyOf(components);
     }
 
-    private static List<Integer> finishingOrder(List<List<Integer>> adjacency) {
+    private static List<Integer> finishingOrder(List<List<Integer>> adjacency,
+                                                OperationCounter counter) {
         boolean[] visited = new boolean[adjacency.size()];
         int[] nextNeighbor = new int[adjacency.size()];
         Deque<Integer> stack = new ArrayDeque<>();
@@ -72,14 +87,23 @@ public final class KosarajuSCC {
                 continue;
             }
             visited[start] = true;
+            if (counter != null) {
+                counter.recordVertexVisit();
+            }
             stack.push(start);
             while (!stack.isEmpty()) {
                 int vertex = stack.peek();
                 List<Integer> neighbors = adjacency.get(vertex);
                 if (nextNeighbor[vertex] < neighbors.size()) {
                     int neighbor = neighbors.get(nextNeighbor[vertex]++);
+                    if (counter != null) {
+                        counter.recordEdgeExamination();
+                    }
                     if (!visited[neighbor]) {
                         visited[neighbor] = true;
+                        if (counter != null) {
+                            counter.recordVertexVisit();
+                        }
                         stack.push(neighbor);
                     }
                 } else {
@@ -91,16 +115,26 @@ public final class KosarajuSCC {
     }
 
     private static void collectComponent(int start, List<List<Integer>> transpose,
-                                         boolean[] visited, List<Integer> component) {
+                                         boolean[] visited, List<Integer> component,
+                                         OperationCounter counter) {
         Deque<Integer> stack = new ArrayDeque<>();
         visited[start] = true;
+        if (counter != null) {
+            counter.recordVertexVisit();
+        }
         stack.push(start);
         while (!stack.isEmpty()) {
             int vertex = stack.pop();
             component.add(vertex);
             for (int neighbor : transpose.get(vertex)) {
+                if (counter != null) {
+                    counter.recordEdgeExamination();
+                }
                 if (!visited[neighbor]) {
                     visited[neighbor] = true;
+                    if (counter != null) {
+                        counter.recordVertexVisit();
+                    }
                     stack.push(neighbor);
                 }
             }
