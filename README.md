@@ -101,64 +101,101 @@ With lazy duplicate priority-queue entries, runtime is
 `O(V + (E + 1) log(E + 1))` and auxiliary space is `O(V + E)`. For simple
 graphs, the time bound is `O((V + E) log V)`.
 
-## Day 8: benchmark infrastructure
+## Days 8–9: benchmark infrastructure and experiments
 
-The `benchmark` package provides deterministic inputs and a reusable timing
-harness; it does not yet run the full Day 9 experiments or create CSV files.
-No measured results are claimed.
+The `benchmark` package contains deterministic generators, the reusable
+`BenchmarkRunner`, independent result validators, an experiment coordinator,
+and raw/summary CSV output. `BenchmarkExperimentMain` runs Kruskal, Prim,
+topological sort, Kosaraju SCC, and Dijkstra on Small (10 vertices), Medium
+(100), and Large (1000) datasets. Undirected workloads request 30, 500, and
+5000 logical edges, respectively. All graph weights are integers in `[1,100]`.
 
-- `BenchmarkConfig` defines Small (10 vertices, 30 edges), Medium (100, 500),
-  and Large (1000, 5000) datasets, two warm-ups, five measured repetitions, and
-  the fixed seed `20261029`.
-- `GraphGenerator` creates connected simple undirected weighted graphs,
-  simple DAGs, directed cyclic graphs, and connected undirected Dijkstra graphs.
-  Weights are integers in `[1, 100]`. The Dijkstra policy is undirected so
-  source vertex 0 can reach every vertex.
-- `BenchmarkRunner` reuses the same graph for warm-ups and timed repetitions.
-  `System.nanoTime()` measures only algorithm execution; graph creation and
-  correctness checks are outside the timed interval. Warm-ups are not returned
-  as measurements. The harness is an educational microbenchmark, not a formal
-  JMH benchmark; JVM warm-up, garbage collection, scheduling, and machine load
-  can affect observed times.
-- `BenchmarkMetrics` is an immutable record for one measured run, including
-  actual edge count, repeat index, time, correctness status, and a snapshot of
-  operation counts. `OperationCounter` is a per-execution collector, passed
-  only to opt-in instrumented overloads; existing algorithm entry points are
-  preserved.
+The seed is fixed at `20261029`; each generator uses a deterministic
+`java.util.Random` seeded with that value. The experiment reuses each generated
+graph for warm-ups and measured repetitions. It performs two warm-up executions
+and five measured executions for each algorithm/dataset pair. Warm-ups are not
+stored in the returned measurements or CSV files.
 
-Generated undirected graphs have exactly the requested number of logical edges,
-no self-loops or repeated edges, and include a spanning tree. A simple graph
-requires `V - 1 <= E <= V(V - 1)/2`. DAG edges only point from a lower vertex ID
-to a higher ID, so a simple DAG has at most `V(V - 1)/2` edges (4,950 at
-V=100). The assignment specifies a separate 495-edge cap for its standard
-Medium DAG, so that dataset uses 495 rather than 500. This is a workload policy,
-not the mathematical maximum. `BenchmarkConfig.dagEdgeCount(dataset)` applies
-that explicit Medium-dataset cap; other impossible counts are rejected.
-The cyclic graph generator includes a cycle of length `V` (a two-vertex cycle
-when `V=2`) and then fills to the exact requested count. Impossible edge counts
-are rejected rather than silently reduced, except for the explicit DAG dataset
-edge-count policy.
+Graph policies:
 
-Optional counters record executed operations, not theoretical estimates:
+- Kruskal and Prim use the same connected, simple, undirected weighted graph
+  for each dataset. The generator inserts a spanning tree and then unique
+  logical edges, with no loops or duplicate edges.
+- Topological sort uses a simple DAG whose edges point from lower to higher
+  vertex IDs. The Medium target of 500 is capped to **495 actual edges** by
+  `BenchmarkConfig.dagEdgeCount`; this is the documented workload cap. The
+  mathematical maximum for a simple 100-vertex DAG is 4,950 edges.
+- Kosaraju SCC uses a simple directed graph with a two-edge directed cycle and
+  fills to the exact dataset edge count without loops or duplicate edges. SCCs
+  need not contain all vertices in a single component.
+- Dijkstra uses a connected, simple, undirected weighted graph, so source vertex
+  0 reaches every vertex and all weights are nonnegative.
 
-- Kruskal: examined candidate edges, union attempts, and successful unions;
-  edge examinations stop when its spanning tree is complete.
-- Prim: adjacency edge examinations and priority-queue insertions when each
-  candidate is enqueued, plus every removal including stale candidates.
-- Topological sort: edge examinations in both the in-degree and Kahn passes,
-  and vertices removed from the ready queue.
-- Kosaraju SCC: DFS edge examinations across both passes and vertices marked
-  visited across both passes.
-- Dijkstra: examined adjacency edges, all queue removals including stale
-  entries, queue insertions including the source, and successful distance
-  relaxations.
+`BenchmarkExperiment` verifies the actual vertex and logical-edge counts before
+running an algorithm. Before timing, it also verifies MST agreement, rejects a
+cyclic topological-sort input, and computes independent reference shortest
+distances. For every warm-up and measured result, validation checks MST tree
+structure and baseline weight, every topological-order constraint, complete
+non-overlapping SCC partitioning, or Dijkstra distances and reconstructed path
+edges/costs. Any validation failure throws and prevents result-file writing.
+Small-graph tests additionally compare SCC groups to mutual reachability.
 
-Operation counts are algorithm-specific and should not be compared across
-different algorithms as if they were identical work units. The graph families
-and counters provide reproducible inputs and observed work; theoretical
-complexity describes asymptotic growth, while empirical time depends on the
-input, JVM, hardware, and environment. Day 9 will add experiment orchestration
-and CSV summaries; plots and final analysis remain for Day 10.
+`BenchmarkRunner` measures only the algorithm function with
+`System.nanoTime()`. Graph generation, precomputed references, and result
+validation occur outside each timed interval. Per-run counter snapshots are
+created after timing. The algorithm execution itself includes the opt-in
+counter null checks and increments; reported times therefore include
+instrumentation overhead and should not be interpreted as uninstrumented
+production timings.
+
+Operation counters record performed work, with algorithm-specific definitions:
+
+- Kruskal: candidate-edge examinations, DSU union attempts, successful unions.
+  The edge loop stops after the tree is complete; sorting and internal DSU
+  `find` calls are not counted.
+- Prim: adjacency entries examined/enqueued and every priority-queue removal,
+  including stale candidates.
+- Topological sort: edge scans in both the initial indegree pass and Kahn pass;
+  vertices removed from the ready queue.
+- Kosaraju SCC: DFS edge examinations and first-time vertex marks in both DFS
+  passes. A vertex may count once in each pass; transpose construction is not
+  counted.
+- Dijkstra: examined adjacency edges, queue insertions (including the source),
+  queue removals (including stale entries), and successful distance
+  relaxations. The pre-run negative-weight scan is not counted.
+
+Counters describe algorithm-specific operations and are not directly
+comparable between different algorithms. Timing summaries are empirical
+observations, not guaranteed runtime. This is a lightweight educational
+`System.nanoTime()` benchmark, not JMH; JVM compilation, garbage collection,
+scheduling, and machine load can affect results.
+
+Run the complete experiment from the project root after building:
+
+```text
+mvn package
+java -cp target/classes benchmark.BenchmarkExperimentMain
+```
+
+The main class creates `results/tables` as needed and overwrites both files on
+each complete run:
+
+- `results/tables/benchmark_runs.csv`: one row for each of the 75 measured
+  executions; columns are `algorithm`, `dataset`, `graph_family`, `vertices`,
+  `requested_edges`, `actual_edges`, `seed`, `repeat`, `elapsed_ns`,
+  `correctness_status`, `edge_examinations`, `priority_queue_polls`,
+  `priority_queue_insertions`, `successful_relaxations`, `union_attempts`,
+  `successful_unions`, `vertices_processed`, and `vertices_visited`.
+- `results/tables/benchmark_summary.csv`: one row per algorithm/dataset group
+  (15 rows), with sample count, mean/median/minimum/maximum nanoseconds, and
+  mean values for all operation-counter columns. The even-sample median is the
+  arithmetic mean of the two middle sorted values; means are rounded to six
+  decimal places and trailing zeros are omitted.
+
+The output directory can be overridden with an optional command-line argument,
+for example `java -cp target/classes benchmark.BenchmarkExperimentMain custom/results`.
+The fixed seed and dataset definitions reproduce graph inputs;
+elapsed times naturally vary by runtime environment.
 
 ## Build, test, and run
 
@@ -185,7 +222,8 @@ topological-sort, cycle-detection, SCC, and shortest-path examples.
 - `connectivity`: Kahn's topological sort and Kosaraju's SCC implementation
 - `shortestpath`: Dijkstra's algorithm and immutable `ShortestPathResult`
 - `benchmark`: benchmark configuration, deterministic graph generation,
-  operation counts, per-run metrics, and the timing harness
+  validators, experiment orchestration, operation counts, CSV output, and
+  timing/summary metrics
 - `Main`: graph-model, MST, connectivity, and shortest-path demonstration
 - `src/test/java/graph`, `src/test/java/dsu`, `src/test/java/mst`,
   `src/test/java/connectivity`, and `src/test/java/shortestpath`: unit tests

@@ -61,9 +61,8 @@ public final class GraphGenerator {
         WeightedGraph graph = new WeightedGraph(vertices, true);
         Set<Long> selected = new HashSet<>();
         Random random = new Random(seed);
-        for (int vertex = 0; vertex < vertices; vertex++) {
-            addDirectedEdge(graph, selected, vertex, (vertex + 1) % vertices, random);
-        }
+        addDirectedEdge(graph, selected, 0, 1, random);
+        addDirectedEdge(graph, selected, 1, 0, random);
         addRemaining(graph, selected, directedCandidates(vertices), edges, random);
         return graph;
     }

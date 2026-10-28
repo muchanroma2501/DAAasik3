@@ -70,13 +70,22 @@ class BenchmarkInfrastructureTest {
     }
 
     @Test
-    void cyclicGeneratorAlwaysIncludesCycleAndExactEdgeCount() {
-        WeightedGraph graph = GraphGenerator.generateDirectedCyclicGraph(10, 30, 7);
+    void cyclicGeneratorProducesExactSimpleCycleAtBoundaries() {
+        int[][] cases = {{6, 2}, {5, 4}, {7, 7}, {10, 30}};
+        for (int[] testCase : cases) {
+            int vertices = testCase[0];
+            int edges = testCase[1];
+            WeightedGraph graph = GraphGenerator.generateDirectedCyclicGraph(
+                    vertices, edges, 7);
+            WeightedGraph repeated = GraphGenerator.generateDirectedCyclicGraph(
+                    vertices, edges, 7);
 
-        assertTrue(graph.isDirected());
-        assertEquals(30, graph.getEdges().size());
-        assertNoDuplicateOrLoop(graph, true);
-        assertTrue(TopologicalSort.sort(graph).hasCycle());
+            assertTrue(graph.isDirected());
+            assertEquals(edges, graph.getEdges().size());
+            assertNoDuplicateOrLoop(graph, true);
+            assertTrue(TopologicalSort.sort(graph).hasCycle());
+            assertEquals(graph.getEdges(), repeated.getEdges());
+        }
     }
 
     @Test
@@ -111,6 +120,8 @@ class BenchmarkInfrastructureTest {
                 () -> GraphGenerator.generateDirectedCyclicGraph(1, 0, 1));
         assertThrows(IllegalArgumentException.class,
                 () -> GraphGenerator.generateDirectedCyclicGraph(4, 1, 1));
+        assertThrows(IllegalArgumentException.class,
+                () -> GraphGenerator.generateDirectedCyclicGraph(4, 13, 1));
     }
 
     @Test
